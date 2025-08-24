@@ -22,27 +22,36 @@ def download_video():
         return jsonify({"error": "Nenhum link fornecido."}), 400
 
     temp_dir = tempfile.mkdtemp()
+    cookie_file = None
 
     try:
+        cookies_string = os.environ.get('COOKIES')
+        
+        if cookies_string:
+            with tempfile.NamedTemporaryFile(mode='w', delete=False) as temp_cookie_file:
+                temp_cookie_file.write(cookies_string)
+                cookie_file = temp_cookie_file.name
+        
+        ydl_opts = {
+            'outtmpl': os.path.join(temp_dir, '%(title)s.%(ext)s'),
+            'noplaylist': True,
+            'quiet': True,
+            'no_warnings': True,
+        }
+
+        if cookie_file:
+            ydl_opts['cookiefile'] = cookie_file
+
         if download_format == 'mp4':
-            ydl_opts = {
-                'format': 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best',
-                'outtmpl': os.path.join(temp_dir, '%(title)s.%(ext)s'),
-                'quiet': True,
-                'merge_output_format': 'mp4',
-            }
+            ydl_opts['format'] = 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best'
             mimetype = 'video/mp4'
         elif download_format == 'mp3':
-            ydl_opts = {
-                'format': 'bestaudio/best',
-                'outtmpl': os.path.join(temp_dir, '%(title)s.%(ext)s'),
-                'postprocessors': [{
-                    'key': 'FFmpegExtractAudio',
-                    'preferredcodec': 'mp3',
-                    'preferredquality': '192',
-                }],
-                'quiet': True,
-            }
+            ydl_opts['format'] = 'bestaudio/best'
+            ydl_opts['postprocessors'] = [{
+                'key': 'FFmpegExtractAudio',
+                'preferredcodec': 'mp3',
+                'preferredquality': '192',
+            }]
             mimetype = 'audio/mpeg'
         else:
             return jsonify({"error": "Formato de download inválido."}), 400
@@ -74,6 +83,8 @@ def download_video():
     finally:
         if os.path.exists(temp_dir):
             shutil.rmtree(temp_dir)
+        if cookie_file and os.path.exists(cookie_file):
+            os.remove(cookie_file)
 
 if __name__ == '__main__':
     app.run(debug=True, port=5000)
