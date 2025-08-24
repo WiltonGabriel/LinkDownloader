@@ -22,25 +22,25 @@ def download_video():
         return jsonify({"error": "Nenhum link fornecido."}), 400
 
     temp_dir = tempfile.mkdtemp()
-    cookie_file = None
+    cookie_file_path = None
 
     try:
         cookies_string = os.environ.get('COOKIES')
         
         if cookies_string:
-            with tempfile.NamedTemporaryFile(mode='w', delete=False) as temp_cookie_file:
+            with tempfile.NamedTemporaryFile(delete=False, mode='w') as temp_cookie_file:
                 temp_cookie_file.write(cookies_string)
-                cookie_file = temp_cookie_file.name
-        
+                cookie_file_path = temp_cookie_file.name
+
         ydl_opts = {
-            'outtmpl': os.path.join(temp_dir, '%(title)s.%(ext)s'),
+            'outtmpl': os.path.join(temp_dir, '%(title).20s-%(id)s.%(ext)s'),
             'noplaylist': True,
             'quiet': True,
             'no_warnings': True,
         }
 
-        if cookie_file:
-            ydl_opts['cookiefile'] = cookie_file
+        if cookie_file_path:
+            ydl_opts['cookiefile'] = cookie_file_path
 
         if download_format == 'mp4':
             ydl_opts['format'] = 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best'
@@ -83,8 +83,8 @@ def download_video():
     finally:
         if os.path.exists(temp_dir):
             shutil.rmtree(temp_dir)
-        if cookie_file and os.path.exists(cookie_file):
-            os.remove(cookie_file)
+        if cookie_file_path and os.path.exists(cookie_file_path):
+            os.remove(cookie_file_path)
 
 if __name__ == '__main__':
     app.run(debug=True, port=5000)
