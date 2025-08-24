@@ -2,7 +2,7 @@
 
 ## Sobre o Projeto
 
-Este é um projeto simples que criei para resolver um problema pessoal: meu pai vive pedindo para eu baixar vídeos do Facebook e do YouTube para ele postar nos status.
+Este é um projeto simples que criei para resolver um problema pessoal: meu pai vivia pedindo para eu baixar vídeos do Facebook e do YouTube e mandar para ele assim podendo postar nos status, É.
 
 Para facilitar a vida, decidi criar esta ferramenta usando Python e Flask. É um aplicativo web fácil de usar, onde qualquer um pode simplesmente colar o link e baixar o vídeo ou áudio.
 
