@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+
+  <head>
+
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LinkDownloader</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">c
+    
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;700&display=swap" rel="stylesheet">
+
+    </head>
+
+  <body>
+
+    <header></header>
+
+    <main id="main-content">
+
+      <h1>LinkDownloader</h1>
+
+      <p>Cole o link de um vídeo do YouTube, Instagram ou Facebook e baixe-o como mp4 ou mp3.</p>
+
+      <h2>Cole o link aqui</h2>
+      <div id="input-container">
+
+       <input type="text" id="inputDownload">
+       <button id="verificar-btn">Verificar Link</button>
+       <button id="clear-btn" style="display: none;">Limpar</button>
+
+      </div>
+      <div id="download-area"></div>
+
+    <p>Esta ferramenta destina-se apenas a uso pessoal. Respeite os direitos autorais dos criadores de conteúdo.</p>
+
+    </main>
+
+  <footer>
+    <p>Projeto de autoria de Wilton Gabriel.</p>
+    <a href="https://github.com/WiltonGabriel">GitHub</a>
+  </footer>
+
+  <script src="{{ url_for('static', filename='script.js') }}"></script>
+  </body>
+
+</html>
