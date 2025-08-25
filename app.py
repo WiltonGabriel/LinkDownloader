@@ -1,9 +1,10 @@
-from flask import Flask, request, jsonify, send_file, render_template
+# app.py
+
+from flask import Flask, request, jsonify, render_template, Response, stream_with_context
 from flask_cors import CORS
-from yt_dlp import YoutubeDL
-import tempfile
+import subprocess
 import os
-import shutil
+import tempfile
 
 app = Flask(__name__)
 CORS(app)
@@ -21,68 +22,94 @@ def download_video():
     if not link:
         return jsonify({"error": "Nenhum link fornecido."}), 400
 
-    temp_dir = tempfile.mkdtemp()
     cookie_file_path = None
-
+    temp_cookie_file = None
     try:
+        # Gerencia o arquivo de cookies temporário se a variável de ambiente existir
         cookies_string = os.environ.get('COOKIES')
-        
         if cookies_string:
-            with tempfile.NamedTemporaryFile(delete=False, mode='w') as temp_cookie_file:
-                temp_cookie_file.write(cookies_string)
-                cookie_file_path = temp_cookie_file.name
+            temp_cookie_file = tempfile.NamedTemporaryFile(delete=False, mode='w', suffix='.txt')
+            temp_cookie_file.write(cookies_string)
+            cookie_file_path = temp_cookie_file.name
+            temp_cookie_file.close()
 
-        ydl_opts = {
-            'outtmpl': os.path.join(temp_dir, '%(title).20s-%(id)s.%(ext)s'),
-            'noplaylist': True,
-            'quiet': True,
-            'no_warnings': True,
-        }
-
+        # --- Passo 1: Obter o nome do arquivo primeiro (operação rápida) ---
+        filename_cmd = ['yt-dlp', '--get-filename', '-o', '%(title).25s-%(id)s.%(ext)s', link]
         if cookie_file_path:
-            ydl_opts['cookiefile'] = cookie_file_path
+            filename_cmd.extend(['--cookie', cookie_file_path])
+        
+        # Ajusta o comando para obter a extensão correta (.mp3)
+        if download_format == 'mp3':
+            filename_cmd.extend(['--extract-audio', '--audio-format', 'mp3'])
 
+        try:
+            original_filename = subprocess.check_output(filename_cmd, stderr=subprocess.PIPE).decode('utf-8').strip()
+            if download_format == 'mp3':
+                base, _ = os.path.splitext(original_filename)
+                download_name = f"{base}.mp3"
+            else:
+                download_name = original_filename
+        except subprocess.CalledProcessError as e:
+            print(f"Erro ao obter nome do arquivo: {e.stderr.decode('utf-8', errors='ignore')}")
+            return jsonify({"error": "Link inválido ou vídeo indisponível."}), 500
+
+        # --- Passo 2: Preparar o comando de download para streaming ---
         if download_format == 'mp4':
-            ydl_opts['format'] = 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best'
             mimetype = 'video/mp4'
+            download_cmd = [
+                'yt-dlp', link,
+                '-f', 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best',
+                '-o', '-',  # Saída para stdout (para streaming)
+            ]
         elif download_format == 'mp3':
-            ydl_opts['format'] = 'bestaudio/best'
-            ydl_opts['postprocessors'] = [{
-                'key': 'FFmpegExtractAudio',
-                'preferredcodec': 'mp3',
-                'preferredquality': '192',
-            }]
             mimetype = 'audio/mpeg'
+            download_cmd = [
+                'yt-dlp', link,
+                '-f', 'bestaudio/best',
+                '--extract-audio',
+                '--audio-format', 'mp3',
+                '--audio-quality', '192K',
+                '-o', '-',  # Saída para stdout
+            ]
         else:
             return jsonify({"error": "Formato de download inválido."}), 400
 
-        with YoutubeDL(ydl_opts) as ydl:
-            info_dict = ydl.extract_info(link, download=True)
-            file_path = ydl.prepare_filename(info_dict)
-            
-            if download_format == 'mp3':
-                base, ext = os.path.splitext(file_path)
-                file_path = base + '.mp3'
+        if cookie_file_path:
+            download_cmd.extend(['--cookie', cookie_file_path])
+        
+        # --- Passo 3: Iniciar o processo e fazer o streaming da resposta ---
+        process = subprocess.Popen(download_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 
-        if not os.path.exists(file_path):
-             raise FileNotFoundError("O arquivo baixado não foi encontrado.")
+        def generate_stream():
+            try:
+                # Lê a saída do processo em pedaços e envia para o cliente
+                while True:
+                    chunk = process.stdout.read(4096)
+                    if not chunk:
+                        break
+                    yield chunk
+                
+                # Verifica se houve algum erro durante o processo
+                stderr_output = process.stderr.read().decode('utf-8', errors='ignore')
+                if process.wait() != 0:
+                    print(f"Erro no yt-dlp: {stderr_output}")
+            finally:
+                # Garante que o processo seja finalizado
+                process.terminate()
 
-        download_name = os.path.basename(file_path)
+        headers = {
+            'Content-Disposition': f'attachment; filename="{download_name}"',
+            'Content-Type': mimetype
+        }
 
-        return send_file(
-            file_path,
-            as_attachment=True,
-            download_name=download_name,
-            mimetype=mimetype
-        )
+        # Usa stream_with_context para transmitir a resposta
+        return Response(stream_with_context(generate_stream()), headers=headers)
 
     except Exception as e:
-        print(f"Erro: {e}")
-        return jsonify({"error": "Ocorreu um erro no download. Verifique o link ou o formato do vídeo."}), 500
-    
+        print(f"Erro inesperado: {e}")
+        return jsonify({"error": "Ocorreu um erro inesperado no servidor."}), 500
     finally:
-        if os.path.exists(temp_dir):
-            shutil.rmtree(temp_dir)
+        # Limpa o arquivo de cookie temporário
         if cookie_file_path and os.path.exists(cookie_file_path):
             os.remove(cookie_file_path)
 
